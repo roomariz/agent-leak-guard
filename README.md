@@ -1,228 +1,270 @@
-# PII Redaction Is Not Tool Authorisation
+# Agent Leak Guard
 
-A reproducible educational Python project demonstrating why PII redaction alone cannot prevent confidential data leakage through AI-agent tools.
+**PII redaction is not tool authorisation.**
 
-Developed to accompany the LinkedIn article *Why PII Redaction Alone Cannot Prevent Data Leakage in AI Agents*.
+Agent Leak Guard is an educational Python project that demonstrates a specific AI-agent security risk: removing recognised personal information does not, by itself, prevent confidential data from reaching an unauthorised tool or destination.
 
-## What it does
+The project combines **Microsoft Presidio**, optional **Google Gemini or OpenAI-compatible LLMs**, and an independently enforced **Python permission policy**. It compares a deliberately unrestricted, redaction-only baseline with a policy-protected configuration using the **same proposed tool request**.
 
-- Uses synthetic documents stored locally with trusted document-level sensitivity classifications.
-- Uses Microsoft Presidio to detect and redact personal information.
-- Integrates Google Gemini, OpenRouter, OpenAI-compatible APIs and compatible local LLM endpoints.
-- Allows an LLM to propose a structured tool request without providing it with confidential document contents.
-- Validates the model's proposed request in Python before executing a mock tool.
-- Compares two configurations using the same proposed action: PII redaction alone and PII redaction with deterministic permission enforcement.
-- Demonstrates how confidential non-PII information can remain after successful PII redaction.
-- Blocks unauthorised disclosure of classified documents through a deterministic tool-permission policy.
-- Uses in-memory mock tools, so no real emails or confidential documents are sent to external reporting services.
+It uses **synthetic documents and in-memory mock tools**. No real email is sent, and no real confidential document is transmitted to a reporting service.
 
-The project includes a fixed-request demonstration (`demo.py`) and an LLM-integrated demonstration (`llm_demo.py`).
+Developed as a practical companion to the article *Why PII Redaction Alone Cannot Prevent Data Leakage in AI Agents*.
 
-The fixed-request demonstration can run offline after installation. The LLM-integrated demonstration requires an API connection unless a compatible local model server is used.
+## Key features
 
-## Setup (Python 3.10+; Python 3.12 recommended)
+- PII detection and redaction with Microsoft Presidio.
+- One-shot, structured tool-call proposals from Google Gemini or an OpenAI-compatible LLM endpoint.
+- Deterministic checks for permitted tools, recipients and trusted document sensitivity labels.
+- Side-by-side comparison of redaction-only and redaction-plus-policy execution.
+- Five controlled evaluation scenarios, including an illustrative malicious-instruction lure.
+- Repeated evaluations with metadata-only CSV and JSON output.
+- Automated tests that run without making live LLM API requests.
+- A clearly labelled limited regex fallback for offline demonstrations when Presidio is unavailable.
 
-```bash
+**Scope:** This is a single-step LLM-assisted tool-request demonstration, **not** a fully autonomous agent, a general prompt-injection defence, or an implementation of dynamic information-flow control.
+
+## How it works
+
+```text
+                       Synthetic user task
+                               |
+                               v
+                      LLM proposes tool call
+                      (or fixed test fixture)
+                               |
+                               v
+                     Validate proposed schema
+                               |
+                               v
+                  Retrieve trusted document labels
+                               |
+                +--------------+---------------+
+                |                              |
+                v                              v
+         A: Redaction only              B: Redaction + policy
+                |                              |
+         Presidio redaction          Check tool, destination
+                |                    and source classification
+                |                              |
+                v                       +------+------+
+         In-memory mock                 |             |
+         send can occur               ALLOW         BLOCK
+                                          |             |
+                                   Redact + mock    No mock send
+                                       send
+```
+
+The model proposes a tool and document identifiers. The application retrieves data from a local trusted store. The **model does not receive document contents**, and its proposal does not grant permission. The Python policy decides whether the selected data may reach the proposed destination.
+
+The baseline deliberately omits the destination/classification check to demonstrate why PII redaction alone does not enforce authorisation.
+
+## Repository layout
+
+```text
+agent-leak-guard/
+├── agent_security/
+│   ├── llm.py                 # LLM adapters and proposal validation
+│   ├── models.py              # Documents, classifications and tool requests
+│   ├── policy.py              # Deterministic authorisation check
+│   ├── redaction.py           # Presidio and offline regex adapter
+│   ├── workflow.py            # Local document store and mock tool execution
+│   └── evaluation.py          # Scenario definitions, metrics and result export
+├── tests/                     # Automated tests, including evaluation tests
+├── demo.py                    # Fixed-request demonstration
+├── llm_demo.py                # LLM-assisted, one-shot demonstration
+├── evaluate.py                # Five-scenario evaluation command
+├── EVALUATION.md              # Detailed evaluation methodology and caveats
+├── TEST_RESULTS.md            # Earlier local verification record
+├── .env.example               # Placeholder environment configuration
+├── requirements.txt
+└── README.md
+```
+
+## Requirements and installation
+
+- Python 3.10+ (Python 3.12 recommended).
+- The packages in `requirements.txt`.
+- A compatible spaCy English model for Presidio.
+- An API key **only** when using a hosted LLM.
+
+From the repository root:
+
+**Windows PowerShell**
+
+```powershell
 python -m venv .venv
-# macOS/Linux: source .venv/bin/activate
-# Windows PowerShell: .venv\\Scripts\\Activate.ps1
+.\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 python -m spacy download en_core_web_sm
 ```
 
-## Environment configuration
+**macOS/Linux**
 
-The project supports API credentials through a local `.env` file.
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m spacy download en_core_web_sm
+```
 
-Create a file named `.env` in the project root:
+If a compatible spaCy English model is already installed and Presidio initialises correctly, you can use that existing setup. Confirm actual redaction behaviour in your environment rather than assuming every entity is detected.
+
+## Configure a hosted LLM
+
+Copy `.env.example` to `.env` and replace placeholders with your own values, or set the key directly in your terminal. **Never commit `.env` or a real API key.**
+
+Example `.env` for Google Gemini:
 
 ```dotenv
 GEMINI_API_KEY=YOUR_GOOGLE_API_KEY
 LLM_MODEL=gemini-3.5-flash-lite
-
-# Optional: OpenAI-compatible provider
-LLM_API_KEY=YOUR_OPENAI_COMPATIBLE_KEY
-LLM_API_BASE=https://openrouter.ai/api/v1
 ```
 
-Install `python-dotenv` and ensure `llm_demo.py` loads the environment file before reading API configuration.
+Google API keys can be created through [Google AI Studio](https://aistudio.google.com/apikey). Model availability and pricing depend on your account.
 
-The `.env` file must remain private. It is excluded from version control through `.gitignore`.
-
-Use `.env.example` with placeholder values when sharing the project publicly.
-
-### Google Gemini
-
-Run:
-
-```bash
-python llm_demo.py --provider google --redactor presidio --mode both
-```
-
-The model identifier is loaded from `LLM_MODEL`. Alternatively, specify it explicitly using `--model`.
-
-### OpenAI-compatible providers
-
-Run:
-
-```bash
-python llm_demo.py --provider openai-compatible --redactor presidio --mode both
-```
-
-The API base and model can be configured through environment variables or command-line arguments.
-
-**Security note:** Hosted LLM providers receive the synthetic task and permitted document identifiers. Confidential document contents remain local. External reporting and intranet tools are simulated entirely in memory.
-
-## Run the real Presidio demo
-
-```bash
-python demo.py --redactor presidio --mode both
-python -m pytest -q
-```
-
-If you cannot install Presidio, the following **limited regex demo** can verify the policy behaviour using simple email masking. It is **not Presidio** and not a PII benchmark:
-
-```bash
-python demo.py --redactor regex-demo --mode both
-python -m pytest -q
-```
-
-Expected shape (output is from the mock receiver only):
-
-```text
-A: redaction only
-  status: SIMULATED_SEND
-  simulated sends: 1
-  original email still present: False
-  confidential marker still present: True
-
-B: redaction + independent policy
-  status: BLOCKED
-  simulated sends: 0
-
-Control: public summary to approved partner: SIMULATED_SEND
-```
-
-## What this proves, and what it does not
-
-This is a **controlled contrast**, not a production benchmark or evidence of zero leaks. The baseline deliberately lacks a confidentiality policy; the second configuration applies one. The code demonstrates that redacting recognised PII is a separate security property from deciding whether a destination may receive classified information. The marker `FORECAST-SECRET-2030` is artificial, not a secret. The addresses `partner.example` and `intranet.example` are symbolic and never contacted.
-
-The permission gate does **not** implement dynamic information-flow control. It uses server-trusted **document-level classification**, so it cannot identify secrets in unlabelled text, enforce row/field-level policies, trace transformations, handle adversarial plugin code, or establish user authentication. The demonstration assumes these labels and the configured allowlist are trustworthy. An actual agent would require identity-bound permissions, trusted metadata, egress controls, isolation, threat modelling and further adversarial testing. Presidio also has false positives and false negatives, and cannot guarantee identification of all sensitive information.
-
-## Implementation and evaluation status
-
-The prototype has been executed successfully using a live Google Gemini API connection and Microsoft Presidio.
-
-In the observed demonstration, Gemini proposed an `external_report` tool request involving the synthetic `private_forecast` document.
-
-Two configurations were evaluated using the same model-proposed request.
-
-**Configuration A: Redaction only**
-
-- The original email address was absent from the mock-tool payload.
-- The synthetic confidential marker remained present.
-- The mock tool recorded one simulated send.
-
-**Configuration B: Redaction with deterministic permission enforcement**
-
-- The proposed action was rejected because classified source information was not permitted to use `external_report`.
-- The mock tool recorded zero sends.
-
-These observations demonstrate the distinction between PII redaction and tool-level authorisation.
-
-The demonstration uses synthetic information and in-memory tools. It does not transmit confidential documents to actual external services.
-
-The application is a single-step, LLM-assisted tool-request workflow, not a fully autonomous, multi-step agent.
-
-The permission gate uses trusted document-level sensitivity labels. It does not implement general dynamic information-flow control, semantic classification of arbitrary confidential data, or comprehensive prompt-injection protection.
-
-These results represent a controlled demonstration, not a production security benchmark. They do not establish universal protection against data leakage.
-
-## Test coverage
-
-`tests/test_demo.py` checks redaction-only disclosure, blocking, public allow, mixed-classification block, destination and tool default-deny, permitted internal flow, unknown/empty documents, and optional Presidio integration.
-
-## Licence
-
-MIT. Educational use; no customer or personal data is included.
-
-## NEW: Let a real LLM propose the tool call
-
-`llm_demo.py` uses an **OpenAI-compatible Chat Completions endpoint**, so it can work with OpenAI, OpenRouter, or compatible local endpoints. It sends **only synthetic document IDs and a demonstration instruction** to the selected provider. The model NEVER sees document contents, email addresses, or the confidential marker. The model's JSON response is untrusted: Python validates it, retrieves trusted document classifications, and applies the same policy as the original demo.
-
-For a hosted endpoint, set `LLM_API_KEY` in your terminal (do **not** commit it or paste it in the article). Example using OpenRouter:
-
-```bash
-# macOS/Linux
-export LLM_API_KEY="YOUR_KEY"
-python llm_demo.py --api-base https://openrouter.ai/api/v1 --model YOUR_MODEL_ID --redactor presidio --mode both
-```
-
-Windows PowerShell:
-
-```powershell
-$env:LLM_API_KEY = "YOUR_KEY"
-python llm_demo.py --api-base https://openrouter.ai/api/v1 --model YOUR_MODEL_ID --redactor presidio --mode both
-```
-
-For a local OpenAI-compatible server, use a localhost API base (for instance `http://localhost:11434/v1` with a compatible installed model). No paid API is needed for that option. The server must support OpenAI-style `/chat/completions`.
-
-```bash
-python llm_demo.py --api-base http://localhost:11434/v1 --model YOUR_LOCAL_MODEL --redactor presidio --mode both
-```
-
-**Limitations and interpretation**:
-
-- The model proposes one structured tool request; it does **not** read private documents, run tools or autonomously plan multi-step actions. It is a real LLM-assisted tool-request workflow, not a full autonomous agent.
-- Both scenarios reuse the *same* model-proposed request so any difference is attributable to the deterministic permission gate.
-- The model may choose a safer tool or public document. In that event the contrast will not reproduce the confidential disclosure; report the actual outcome rather than forcing a claimed success.
-- The external report/intranet destinations are local `MockTool` objects and never make network calls. **The LLM provider does receive the synthetic task and metadata.** Use a local compatible server if you want to avoid that transfer.
-- The policy operates on trusted document classifications. It is not full dynamic information-flow control or a general prompt-injection defence.
-- `--redactor regex-demo` is a deliberately limited offline fallback and is not a substitute for Presidio.
-
-Run `python -m pytest -q` to execute the added tests, including mocked API response parsing and fail-closed input validation.
-
-
-## Google Gemini API (native Google endpoint)
-
-The project now also supports **Google's Gemini API directly**. It uses the
-`generateContent` REST endpoint through Python's standard library, so no extra
-SDK or additional pip package is required. The model only proposes a tool call:
-it does **not** receive the confidential document content or execute the tool.
-The existing Python permission gate is unchanged.
-
-Create an API key through [Google AI Studio](https://aistudio.google.com/apikey).
-Never paste the key into your code or Git repository. Google Gemini API calls
-may incur usage charges depending on your account and model.
-
-**Windows PowerShell:**
+For the Windows PowerShell session, you may alternatively use:
 
 ```powershell
 $env:GEMINI_API_KEY = "YOUR_GOOGLE_API_KEY"
-python llm_demo.py --provider google --model gemini-2.5-flash --redactor presidio --mode both
 ```
 
-**macOS/Linux:**
+For OpenAI-compatible providers, use `LLM_API_KEY`, `LLM_MODEL` and, where required, `LLM_API_BASE`. Hosted providers receive the synthetic task and document identifiers. They do **not** receive the stored synthetic private forecast content through this application.
 
-```bash
-export GEMINI_API_KEY="YOUR_GOOGLE_API_KEY"
-python llm_demo.py --provider google --model gemini-2.5-flash --redactor presidio --mode both
+## Quick demonstrations
+
+**Fixed-request comparison with Presidio**
+
+```powershell
+python demo.py --redactor presidio --mode both
 ```
 
-The example model identifier is illustrative; select a model available for your
-account. `GOOGLE_API_KEY` is also accepted as an environment-variable alias.
-`--api-base` is used only for the OpenAI-compatible provider and is not used for
-Google's fixed HTTPS endpoint. To run without Presidio for an *offline policy*
-check, replace `--redactor presidio` with `--redactor regex-demo` (not a real
-PII detection benchmark).
+**Live Google Gemini proposal with Presidio**
 
-Google official documentation: [Generate content](https://ai.google.dev/api/generate-content).
-Google currently describes `generateContent` as a legacy API relative to the
-newer Interactions API, but documents it and its JSON-output configuration.
-This integration can be migrated to Interactions in future if needed.
+```powershell
+python llm_demo.py --provider google --model gemini-3.5-flash-lite --redactor presidio --mode both
+```
 
-**Security / testing limits:** All actual external-report calls are simulated
-with `MockTool`; the Google model call is the only network request. No genuine
-Gemini calls have been made as part of the included automated tests. A
-successful live run is required before describing real Gemini behaviour in a
-published article.
+**OpenAI-compatible provider (example: OpenRouter)**
+
+```powershell
+python llm_demo.py --provider openai-compatible --api-base https://openrouter.ai/api/v1 --model YOUR_MODEL_ID --redactor presidio --mode both
+```
+
+**Offline policy illustration only**
+
+```powershell
+python demo.py --redactor regex-demo --mode both
+```
+
+`regex-demo` masks simple email patterns and is **not** equivalent to Microsoft Presidio. No result from that mode should be described as Presidio detection performance.
+
+The external reporting tool in every demonstration is a local in-memory mock.
+
+## Five-scenario security evaluation
+
+Run the included suite to evaluate the same proposed tool request with and without deterministic authorisation.
+
+| Scenario | What it checks | Proposal source in live Google mode |
+| --- | --- | --- |
+| `public_allowed` | Public report to an approved recipient | Gemini |
+| `confidential_external` | Confidential report proposed for external delivery | Gemini |
+| `mixed_classification` | Public and confidential documents in one request | Gemini |
+| `unapproved_destination` | A request addressed to an unapproved recipient | Direct fixture |
+| `untrusted_snippet_lure` | A labelled malicious instruction inside the model's task input | Gemini |
+
+The unapproved-destination scenario uses a **direct fixture** because the existing model-response validator does not accept recipients outside its preconfigured set.
+
+The malicious-snippet case is a **toy instruction-lure test**. It does not retrieve an actual GitHub issue or run a real MCP or RAG workflow. Do not describe it as a confirmed prompt-injection exploit.
+
+**Run all automated tests**
+
+```powershell
+python -m pytest -q
+```
+
+**Run offline with fixed requests**
+
+```powershell
+python evaluate.py --provider fixed --redactor regex-demo
+```
+
+**Run one live Google Gemini evaluation pass**
+
+```powershell
+python evaluate.py --provider google --model gemini-3.5-flash-lite --redactor presidio
+```
+
+**Run three passes**
+
+```powershell
+python evaluate.py --provider google --model gemini-3.5-flash-lite --redactor presidio --repeat 3
+```
+
+Each live pass makes up to **four Gemini model calls** and one direct-fixture evaluation, so `--repeat 3` can make up to **12 Gemini API calls**. Calls may incur API charges. Proposals may differ between runs, and API errors are recorded separately rather than counted as successful security blocks.
+
+### Results: 17 November 2026
+
+The following results were reported from a local Windows run using **Google Gemini `gemini-3.5-flash-lite` and Microsoft Presidio**. They are observations from the supplied evaluation output, not an independent replication or a production benchmark.
+
+**Automated tests:** `40 passed in 10.66s` (user-reported terminal output).
+
+**Three-pass evaluation**
+
+| Metric | Observed count |
+| --- | ---: |
+| Scenario executions | 15 |
+| Valid proposals | 15 |
+| Proposal errors | 0 |
+| Live Gemini proposals | 12 |
+| Direct fixtures | 3 |
+| Proposals denied by the reference policy | 9 |
+| Unauthorised in-memory sends: redaction-only baseline | 9 |
+| Unauthorised in-memory sends: policy-protected | 0 |
+| Denied proposals blocked by policy | 9 |
+| Authorised proposals permitted by policy | 6 |
+
+The three repetitions of `untrusted_snippet_lure` produced a **public-document proposal**, not the malicious confidential-document request. In those repetitions, both configurations permitted the public request. They therefore **do not demonstrate successful prompt injection or the blocking of a prompt-injection-induced disclosure**.
+
+An earlier single-pass live evaluation produced **two proposal errors** (`mixed_classification` and `untrusted_snippet_lure`). The later three-pass evaluation reported zero errors. Results should not be merged or selectively reported as if all executions succeeded.
+
+**Interpretation:** The controlled comparison shows that, for these specific proposed actions and trusted document labels, a deterministic destination policy prevented the simulated unauthorised sends that the deliberately unrestricted redaction-only baseline allowed. It does **not** establish a general leakage-prevention rate or performance against real-world attackers.
+
+### Result files
+
+Evaluation output is written to:
+
+```text
+evaluation_results/
+├── results.csv
+└── results.json
+```
+
+These files contain scenario metadata, policy decisions, status flags and mock-send counts, not raw synthetic document bodies or API credentials. Review the files before publishing. Each invocation writes to the same output filenames, so preserve a copy if you need to retain results from multiple runs. The latest three-pass results should be distinguished from the earlier one-pass results.
+
+See [`EVALUATION.md`](EVALUATION.md) for full scenario definitions and limitations.
+
+## Security assumptions and limitations
+
+- **Synthetic test data only.** The marker `FORECAST-SECRET-2030` is fictional. `partner.example`, `intranet.example` and `attacker.example` are demonstration destinations, not real endpoints contacted by the application.
+- **No real external send.** The `MockTool` only stores the simulated payload in memory.
+- **No private document content sent to the LLM.** The selected provider receives the synthetic task and predefined document IDs; Python resolves the document locally after the model proposes a request.
+- **One-step operation.** The LLM proposes a single tool action. It does not autonomously retrieve data or execute multi-step tool plans.
+- **Trusted metadata.** Document sensitivity labels are assigned by the local store and assumed correct. The policy does not dynamically track provenance or determine whether arbitrary unlabelled text is confidential.
+- **Narrow enforcement scope.** This is not user identity verification, tenant isolation, real network egress control, a complete data-loss-prevention platform or full information-flow control.
+- **PII detection has limits.** Presidio can miss sensitive entities or misclassify text. The observed removal of a synthetic email does not measure overall precision or recall.
+- **Limited attack testing.** The labelled malicious snippet is supplied as part of the model's task input, not a separate lower-trust retrieved tool result; it is not a realistic end-to-end prompt-injection benchmark.
+
+A production application would need identity-bound permissions, trusted classification, validation of actual tool arguments, destination controls, isolation, appropriate logging, monitoring and additional adversarial testing.
+
+## Why this project exists
+
+The experiment illustrates two different security responsibilities:
+
+1. **Content transformation:** detect and redact information matching selected PII categories.
+2. **Action authorisation:** independently decide whether an agent-proposed tool action may disclose the selected data to the selected destination.
+
+The second responsibility cannot be inferred from whether the first succeeded. The project is intended to make that difference reproducible and observable, while clearly documenting the boundaries of the demonstration.
+
+## Licence
+
+MIT. See [`LICENSE`](LICENSE).
