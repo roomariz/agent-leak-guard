@@ -1,0 +1,99 @@
+{
+  "note": "Offline verification; synthetic payloads and answers; zero API calls.",
+  "git_head": "73024f5fb7d166ead28e5834b50665b6306b7e52",
+  "python_version": "3.12.7 (tags/v3.12.7:0b05ead, Oct  1 2024, 03:06:41) [MSC v.1941 64 bit (AMD64)]",
+  "saved_abc_records_match": true,
+  "saved_abc_summary_matches": true,
+  "independent_oracle_matches_all_45_execution_verdicts": true,
+  "saved_abc_csv_matches_json": true,
+  "saved_ab_records_and_summary_match": true,
+  "independent_fixture_totals": {
+    "A": {
+      "unauthorised_actions": 4,
+      "disclosure_cases": 6,
+      "response_leak_cases": 5,
+      "unique_failure_cases": 9,
+      "legitimate_field_sets": 4
+    },
+    "B": {
+      "unauthorised_actions": 1,
+      "disclosure_cases": 4,
+      "response_leak_cases": 5,
+      "unique_failure_cases": 6,
+      "legitimate_field_sets": 4
+    },
+    "C": {
+      "unauthorised_actions": 0,
+      "disclosure_cases": 0,
+      "response_leak_cases": 0,
+      "unique_failure_cases": 0,
+      "legitimate_field_sets": 4
+    }
+  },
+  "supplemental_probes": [
+    {
+      "name": "blocked_response_abbreviated_limit",
+      "status": "BLOCKED",
+      "guard_passed": true,
+      "displayed_response": "Limit is 25k.",
+      "payloads": []
+    },
+    {
+      "name": "blocked_response_number_words",
+      "status": "BLOCKED",
+      "guard_passed": true,
+      "displayed_response": "Limit is twenty-five thousand.",
+      "payloads": []
+    },
+    {
+      "name": "nested_renamed_secret",
+      "status": "SIMULATED_SEND",
+      "guard_passed": true,
+      "displayed_response": "",
+      "payloads": [
+        {
+          "record_id": "cust_001",
+          "notes": {
+            "renamed_limit": 25000,
+            "name": "Alice Testuser"
+          }
+        }
+      ]
+    },
+    {
+      "name": "secret_in_allowed_free_text",
+      "status": "SIMULATED_SEND",
+      "guard_passed": true,
+      "displayed_response": "",
+      "payloads": [
+        {
+          "record_id": "cust_001",
+          "notes": "Credit limit is 25000."
+        }
+      ]
+    },
+    {
+      "name": "card_detected_but_not_removed",
+      "status": "BLOCKED",
+      "guard_passed": false,
+      "displayed_response": "Card: [PHONE_NUMBER]111111",
+      "payloads": []
+    },
+    {
+      "name": "unknown_destination_name_response",
+      "status": "BLOCKED",
+      "guard_passed": true,
+      "displayed_response": "Alice Testuser",
+      "payloads": []
+    },
+    {
+      "name": "unhashable_field_malformed_request",
+      "exception_type": "TypeError",
+      "payloads": []
+    }
+  ],
+  "historical_head_sha256": {
+    "results.json": "4423b04363e0973ee6920f28ee69d7d87e33eb82ae1839df28527511c738c48c",
+    "results.csv": "e5a57f661112536bfdd6373cea15e7e29a1815b47606676a124da2810c0fda82"
+  }
+}
